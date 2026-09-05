@@ -38,3 +38,4 @@ void websocket_reset_started(void);
 bool websocket_cleanup_is_pending(void);
 void websocket_cleanup_complete(void);
 bool websocket_send_tool_response(const char *id, const char *name, bool success);
+bool websocket_send_tool_response_text(const char *id, const char *name, const char *result);
