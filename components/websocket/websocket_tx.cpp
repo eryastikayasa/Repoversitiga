@@ -14,6 +14,27 @@ const char *websocket_get_server_url(void)
         return NULL;
     }
 
+    const size_t key_len = strlen(api_key);
+    char prefix[5] = "";
+    char suffix[5] = "";
+    if (key_len >= 4) {
+        memcpy(prefix, api_key, 4);
+        memcpy(suffix, api_key + key_len - 4, 4);
+        prefix[4] = '\0';
+        suffix[4] = '\0';
+    }
+
+    ESP_LOGI(TAG, "API key runtime: len=%u prefix=%s suffix=%s valid=%s",
+             (unsigned)key_len,
+             prefix,
+             key_len >= 4 ? suffix : "-",
+             web_config_api_key_is_valid(api_key) ? "YES" : "NO");
+
+    if (!web_config_api_key_is_valid(api_key)) {
+        ESP_LOGE(TAG, "API key NVS tidak valid; WebSocket URL tidak dibuat");
+        return NULL;
+    }
+
     int n = snprintf(
         url, sizeof(url),
         "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=%s",
