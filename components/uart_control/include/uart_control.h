@@ -18,6 +18,9 @@ bool uart_control_execute_command(const char *command);
 // Execute a sensor command and wait for its one-line response.
 bool uart_control_execute_sensor_command(const char *command, char *response, size_t response_len, uint32_t timeout_ms);
 
+// Returns the latest successful sensor response and clears it from the shared slot.
+const char *uart_control_take_last_sensor_response(void);
+
 // Legacy text-action helper retained for compatibility.
 bool uart_control_process_action_text(const char *text);
 
