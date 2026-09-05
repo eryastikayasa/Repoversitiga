@@ -2,6 +2,8 @@
 #include "driver/uart.h"
 #include "hal/gpio_types.h"
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include <string.h>
 
 static const char *TAG = "UART_CTRL";
@@ -63,6 +65,51 @@ bool uart_control_execute_command(const char *command)
     uart_control_send(command);
     ESP_LOGI(TAG, "Gemini command diterima: %s", command);
     return true;
+}
+
+bool uart_control_execute_sensor_command(const char *command, char *response, size_t response_len, uint32_t timeout_ms)
+{
+    if (response && response_len > 0) response[0] = '\0';
+    if (!command || !response || response_len < 2) return false;
+    if (strcmp(command, "cek_suhu") != 0 && strcmp(command, "cek_cahaya") != 0) return false;
+
+    // Drop any stale line before issuing the new sensor request.
+    uart_flush_input(UART_CONTROL_NUM);
+    uart_control_send(command);
+
+    size_t idx = 0;
+    uint8_t byte = 0;
+    TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(timeout_ms);
+
+    while (idx < response_len - 1) {
+        TickType_t now = xTaskGetTickCount();
+        if ((int32_t)(deadline - now) <= 0) break;
+
+        TickType_t remaining = deadline - now;
+        int n = uart_read_bytes(UART_CONTROL_NUM, &byte, 1, remaining);
+        if (n <= 0) continue;
+        if (byte == '\r') continue;
+        if (byte == '\n') {
+            response[idx] = '\0';
+            if (idx == 0) continue;
+
+            const char *prefix = (strcmp(command, "cek_suhu") == 0) ? "SUHU:" : "CAHAYA:";
+            size_t prefix_len = strlen(prefix);
+            if (strncmp(response, prefix, prefix_len) != 0) {
+                ESP_LOGW(TAG, "Respons sensor tidak sesuai: %s", response);
+                idx = 0;
+                continue;
+            }
+
+            ESP_LOGI(TAG, "Sensor response: %s", response);
+            return true;
+        }
+        response[idx++] = (char)byte;
+    }
+
+    response[idx] = '\0';
+    ESP_LOGW(TAG, "Timeout menunggu respons sensor: %s", command);
+    return false;
 }
 
 bool uart_control_process_action_text(const char *text)
