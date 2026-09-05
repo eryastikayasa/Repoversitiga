@@ -1,6 +1,7 @@
 #include "websocket_internal.h"
 #include "web_config.h"
 #include "esp_log.h"
+#include <string.h>
 
 static const char *TAG = "WS_TX";
 
