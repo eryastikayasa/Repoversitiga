@@ -16,8 +16,7 @@ static bool is_valid_action(const char *action)
 {
     static const char *const allowed[] = {
         "r1", "r2", "r3", "r4",
-        "r1_on", "r1_off", "r2_on", "r2_off", "r3_on", "r3_off", "r4_on", "r4_off",
-        "fan_on", "fan_off", "fan_pwr", "fan_speed", "fan_swing", "fan_mode",
+        "fan_speed", "fan_swing", "fan_mode",
         "mp3_mode", "mp3_play", "mp3_eq",
         "m_led", "m_mute", "m_musik", "m_cek",
         "cek_suhu", "cek_cahaya"
