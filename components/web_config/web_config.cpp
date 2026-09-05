@@ -100,6 +100,83 @@ static void nvs_set_str_safe(const char *key, const char *value)
     }
 }
 
+static void log_api_key_diag(const char *api_key, const char *source)
+{
+    if (!api_key) {
+        ESP_LOGW(TAG, "API key diagnostic [%s]: NULL", source ? source : "?");
+        return;
+    }
+
+    const size_t len = strlen(api_key);
+    char prefix[5] = "";
+    char suffix[5] = "";
+    if (len >= 4) {
+        memcpy(prefix, api_key, 4);
+        memcpy(suffix, api_key + len - 4, 4);
+        prefix[4] = '\0';
+        suffix[4] = '\0';
+    } else {
+        strncpy(prefix, api_key, sizeof(prefix) - 1);
+    }
+
+    ESP_LOGI(TAG, "API key diagnostic [%s]: len=%u prefix=%s suffix=%s valid=%s",
+             source ? source : "?",
+             (unsigned)len,
+             prefix,
+             len >= 4 ? suffix : "-",
+             web_config_api_key_is_valid(api_key) ? "YES" : "NO");
+}
+
+static bool api_key_contains_forbidden_text(const char *api_key)
+{
+    if (!api_key) return true;
+    return strstr(api_key, "#include") != NULL ||
+           strstr(api_key, "Arduino.h") != NULL ||
+           strstr(api_key, "#include <") != NULL;
+}
+
+extern "C" bool web_config_api_key_is_valid(const char *api_key)
+{
+    if (!api_key) return false;
+
+    const size_t len = strlen(api_key);
+    if (len < 20 || len >= 128) return false;
+    if (api_key_contains_forbidden_text(api_key)) return false;
+
+    for (size_t i = 0; i < len; ++i) {
+        const unsigned char c = (unsigned char)api_key[i];
+        if (c <= 0x20 || c == 0x7F ||
+            c == '<' || c == '>' ||
+            c == '"' || c == '\'' ||
+            c == '\\' || c == '/' ||
+            c == '&' || c == '#') {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static void dump_config_nvs_keys(void)
+{
+    nvs_iterator_t it = NULL;
+    esp_err_t err = nvs_entry_find("nvs", CONFIG_NAMESPACE, NVS_TYPE_ANY, &it);
+    if (err != ESP_OK) {
+        ESP_LOGI(TAG, "NVS namespace '%s': tidak ada entry yang dapat didaftarkan",
+                 CONFIG_NAMESPACE);
+        return;
+    }
+
+    ESP_LOGI(TAG, "NVS namespace '%s' key inventory:", CONFIG_NAMESPACE);
+    while (err == ESP_OK) {
+        nvs_entry_info_t info;
+        nvs_entry_info(it, &info);
+        ESP_LOGI(TAG, "  key=%s type=%d", info.key, (int)info.type);
+        err = nvs_entry_next(&it);
+    }
+    nvs_release_iterator(it);
+}
+
 static bool boot_button_long_pressed(void)
 {
     gpio_config_t io = {};
@@ -185,6 +262,14 @@ static esp_err_t save_post_handler(httpd_req_t *req)
         return ESP_OK;
     }
 
+    log_api_key_diag(api_key, "POST sebelum NVS");
+    if (!web_config_api_key_is_valid(api_key)) {
+        ESP_LOGE(TAG, "API key ditolak: format tidak valid atau terdeteksi sebagai data/source code lain");
+        httpd_resp_set_status(req, "400 Bad Request");
+        httpd_resp_sendstr(req, "API Key tidak valid. Periksa kembali kolom API Key Gemini.");
+        return ESP_OK;
+    }
+
     web_config_save(wifi_ssid, wifi_pass, api_key, role_text);
     ESP_LOGI(TAG, "Konfigurasi WiFi/API key/role berhasil disimpan, restart...");
 
@@ -219,7 +304,7 @@ bool web_config_is_needed(void)
     nvs_close(handle);
 
     if (force_err == ESP_OK && strcmp(force, "1") == 0) return true;
-    return ssid_err != ESP_OK || ssid[0] == '\0' || key_err != ESP_OK || api_key[0] == '\0';
+    return ssid_err != ESP_OK || ssid[0] == '\0' || key_err != ESP_OK || !web_config_api_key_is_valid(api_key);
 }
 
 void web_config_start(void)
@@ -230,6 +315,15 @@ void web_config_start(void)
     if (err != ESP_OK && err != ESP_ERR_NVS_NO_FREE_PAGES && err != ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_LOGE(TAG, "nvs_flash_init gagal: %s", esp_err_to_name(err));
         return;
+    }
+
+    dump_config_nvs_keys();
+
+    char stored_api_key[128] = "";
+    if (nvs_get_str_safe(KEY_API_KEY, stored_api_key, sizeof(stored_api_key))) {
+        log_api_key_diag(stored_api_key, "NVS saat Config Mode start");
+    } else {
+        ESP_LOGI(TAG, "API key NVS belum tersedia saat Config Mode start");
     }
 
     err = esp_netif_init();
