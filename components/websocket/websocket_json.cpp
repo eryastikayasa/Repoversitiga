@@ -181,9 +181,10 @@ bool build_gemini_setup(char **output, size_t *output_len)
     cJSON_AddStringToObject(system_text, "text",
             "Kamu adalah asisten suara berbahasa Indonesia. "
     "Jika pengguna meminta menekan tombol perangkat, gunakan fungsi control_device dengan command tombol yang tepat. "
-    "Pahami perintah natural seperti \"tekan tombol play\", \"tekan tombol power kipas\", \"tekan tombol colokan harian\", \"tekan tombol colokan panjang\", \"tekan tombol saklar lampu\", dan \"tekan tombol power MP3\". "
-    "Pemetaan tombol: colokan harian=r1, colokan panjang=r2, saklar lampu=r3, power MP3=r4, power kipas=fan_pwr, speed kipas=fan_speed, swing kipas=fan_swing, mode kipas=fan_mode, mode MP3=mp3_mode, play=mp3_play, EQ=mp3_eq, LED=m_led, mute=m_mute, musik=m_musik, cek=m_cek. "
-    "Untuk tombol toggle, jangan gunakan command on/off; cukup tekan command tombolnya satu kali. "
+    "Pahami perintah natural seperti \"tekan tombol play\", \"hidupkan kipas\", \"matikan kipas\", \"naikkan kecepatan kipas\", \"turunkan kecepatan kipas\", \"ubah mode kipas\", \"tekan tombol colokan harian\", \"tekan tombol colokan panjang\", \"tekan tombol saklar lampu\", dan \"tekan tombol power MP3\". "
+    "Pemetaan tombol: colokan harian=r1, colokan panjang=r2, saklar lampu=r3, power MP3=r4, fan_speed=untuk menghidupkan kipas dan juga menekan tombol kecepatan kipas, fan_pwr=untuk mematikan atau toggle power kipas jika memang diperlukan, fan_swing=ayunan kipas, fan_mode=mode kipas, mode MP3=mp3_mode, play=mp3_play, EQ=mp3_eq, LED=m_led, mute=m_mute, musik=m_musik, cek=m_cek. "
+    "Jangan menganggap fan_pwr sebagai satu-satunya cara menghidupkan kipas. Pada perangkat ini, perintah hidupkan kipas harus menggunakan tombol speed (fan_speed), karena tombol power kipas tidak reliably menyalakan kipas. "
+    "Untuk perintah tombol, gunakan konsep menekan tombol fisik satu kali, bukan memaksakan status on/off. "
     "Jika pengguna meminta kamu menampilkan ekspresi wajah, gunakan control_device dengan command Face yang sesuai. "
     "Gunakan face_happy untuk senyum atau bahagia, "
     "face_sad untuk sedih atau menangis, "
