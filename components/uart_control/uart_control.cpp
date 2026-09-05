@@ -69,7 +69,6 @@ bool uart_control_execute_sensor_command(const char *command, char *response, si
     if (response && response_len > 0) response[0] = '\0';
     if (!is_sensor_command(command) || !response || response_len < 2) return false;
 
-    // Remove stale RX data before issuing a fresh sensor request.
     uart_flush_input(UART_CONTROL_NUM);
     uart_control_send(command);
 
@@ -85,6 +84,7 @@ bool uart_control_execute_sensor_command(const char *command, char *response, si
         int n = uart_read_bytes(UART_CONTROL_NUM, &byte, 1, remaining);
         if (n <= 0) continue;
         if (byte == '\r') continue;
+
         if (byte == '\n') {
             response[idx] = '\0';
             if (idx == 0) continue;
@@ -97,32 +97,27 @@ bool uart_control_execute_sensor_command(const char *command, char *response, si
                 continue;
             }
 
-            // DevKit is expected to return prefix + unsigned ADC digits only.
             const char *value = response + prefix_len;
-            if (*value == '\0') {
+            bool numeric = (*value != '\0');
+            for (const char *p = value; numeric && *p; ++p) {
+                if (*p < '0' || *p > '9') numeric = false;
+            }
+            if (!numeric) {
+                ESP_LOGW(TAG, "Nilai sensor tidak numerik: %s", response);
                 idx = 0;
                 continue;
-            }
-            for (const char *p = value; *p; ++p) {
-                if (*p < '0' || *p > '9') {
-                    ESP_LOGW(TAG, "Nilai sensor tidak numerik: %s", response);
-                    idx = 0;
-                    goto wait_next_sensor_line;
-                }
             }
 
             ESP_LOGI(TAG, "Sensor response: %s", response);
             return true;
         }
+
         response[idx++] = (char)byte;
     }
 
     response[idx] = '\0';
     ESP_LOGW(TAG, "Timeout menunggu respons sensor: %s", command);
     return false;
-
-wait_next_sensor_line:
-    continue;
 }
 
 bool uart_control_execute_command(const char *command)
