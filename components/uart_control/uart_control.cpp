@@ -13,6 +13,14 @@ static const char *TAG = "UART_CTRL";
 #define UART_CONTROL_RX_PIN   GPIO_NUM_18
 #define UART_CONTROL_BAUDRATE 115200
 #define UART_CONTROL_BUF_SIZE 1024
+#define SENSOR_RESPONSE_MAX_LEN 32
+
+static char last_sensor_response[SENSOR_RESPONSE_MAX_LEN];
+
+static bool is_sensor_command(const char *command)
+{
+    return command && (strcmp(command, "cek_suhu") == 0 || strcmp(command, "cek_cahaya") == 0);
+}
 
 static bool is_valid_action(const char *action)
 {
@@ -43,6 +51,7 @@ void uart_control_init(void)
     ESP_ERROR_CHECK(uart_param_config(UART_CONTROL_NUM, &uart_cfg));
     ESP_ERROR_CHECK(uart_set_pin(UART_CONTROL_NUM, UART_CONTROL_TX_PIN, UART_CONTROL_RX_PIN,
                                  UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
+    last_sensor_response[0] = '\0';
     ESP_LOGI(TAG, "UART control siap: TX=%d RX=%d baud=%d",
              UART_CONTROL_TX_PIN, UART_CONTROL_RX_PIN, UART_CONTROL_BAUDRATE);
 }
@@ -55,25 +64,12 @@ void uart_control_send(const char *cmd)
     ESP_LOGI(TAG, "TX: %s", cmd);
 }
 
-bool uart_control_execute_command(const char *command)
-{
-    if (command == NULL || command[0] == '\0') return false;
-    if (!is_valid_action(command)) {
-        ESP_LOGW(TAG, "Command ditolak: %s", command);
-        return false;
-    }
-    uart_control_send(command);
-    ESP_LOGI(TAG, "Gemini command diterima: %s", command);
-    return true;
-}
-
 bool uart_control_execute_sensor_command(const char *command, char *response, size_t response_len, uint32_t timeout_ms)
 {
     if (response && response_len > 0) response[0] = '\0';
-    if (!command || !response || response_len < 2) return false;
-    if (strcmp(command, "cek_suhu") != 0 && strcmp(command, "cek_cahaya") != 0) return false;
+    if (!is_sensor_command(command) || !response || response_len < 2) return false;
 
-    // Drop any stale line before issuing the new sensor request.
+    // Remove stale RX data before issuing a fresh sensor request.
     uart_flush_input(UART_CONTROL_NUM);
     uart_control_send(command);
 
@@ -93,12 +89,26 @@ bool uart_control_execute_sensor_command(const char *command, char *response, si
             response[idx] = '\0';
             if (idx == 0) continue;
 
-            const char *prefix = (strcmp(command, "cek_suhu") == 0) ? "SUHU:" : "CAHAYA:";
+            const char *prefix = strcmp(command, "cek_suhu") == 0 ? "SUHU:" : "CAHAYA:";
             size_t prefix_len = strlen(prefix);
             if (strncmp(response, prefix, prefix_len) != 0) {
                 ESP_LOGW(TAG, "Respons sensor tidak sesuai: %s", response);
                 idx = 0;
                 continue;
+            }
+
+            // DevKit is expected to return prefix + unsigned ADC digits only.
+            const char *value = response + prefix_len;
+            if (*value == '\0') {
+                idx = 0;
+                continue;
+            }
+            for (const char *p = value; *p; ++p) {
+                if (*p < '0' || *p > '9') {
+                    ESP_LOGW(TAG, "Nilai sensor tidak numerik: %s", response);
+                    idx = 0;
+                    goto wait_next_sensor_line;
+                }
             }
 
             ESP_LOGI(TAG, "Sensor response: %s", response);
@@ -110,6 +120,43 @@ bool uart_control_execute_sensor_command(const char *command, char *response, si
     response[idx] = '\0';
     ESP_LOGW(TAG, "Timeout menunggu respons sensor: %s", command);
     return false;
+
+wait_next_sensor_line:
+    continue;
+}
+
+bool uart_control_execute_command(const char *command)
+{
+    if (command == NULL || command[0] == '\0') return false;
+    if (!is_valid_action(command)) {
+        ESP_LOGW(TAG, "Command ditolak: %s", command);
+        return false;
+    }
+
+    last_sensor_response[0] = '\0';
+
+    if (is_sensor_command(command)) {
+        if (!uart_control_execute_sensor_command(command, last_sensor_response,
+                                                 sizeof(last_sensor_response), 1500)) {
+            last_sensor_response[0] = '\0';
+            return false;
+        }
+        ESP_LOGI(TAG, "Gemini sensor command berhasil: %s -> %s", command, last_sensor_response);
+        return true;
+    }
+
+    uart_control_send(command);
+    ESP_LOGI(TAG, "Gemini command diterima: %s", command);
+    return true;
+}
+
+const char *uart_control_take_last_sensor_response(void)
+{
+    static char result[SENSOR_RESPONSE_MAX_LEN];
+    if (last_sensor_response[0] == '\0') return NULL;
+    strlcpy(result, last_sensor_response, sizeof(result));
+    last_sensor_response[0] = '\0';
+    return result;
 }
 
 bool uart_control_process_action_text(const char *text)
