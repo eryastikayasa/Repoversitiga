@@ -1,4 +1,5 @@
 #include "websocket_internal.h"
+#include "uart_control.h"
 #include "esp_log.h"
 #include "esp_websocket_client.h"
 #include <stdio.h>
@@ -28,7 +29,6 @@ static bool send_tool_payload(const char *id, const char *name, const char *resu
         return false;
     }
 
-    // result is generated locally from either fixed strings or validated sensor lines.
     char payload[768];
     int len = snprintf(
         payload, sizeof(payload),
@@ -48,6 +48,10 @@ static bool send_tool_payload(const char *id, const char *name, const char *resu
 
 bool websocket_send_tool_response(const char *id, const char *name, bool success)
 {
+    const char *sensor_result = uart_control_take_last_sensor_response();
+    if (sensor_result && sensor_result[0] != '\0') {
+        return send_tool_payload(id, name, sensor_result);
+    }
     return send_tool_payload(id, name, success ? "ok" : "error");
 }
 
