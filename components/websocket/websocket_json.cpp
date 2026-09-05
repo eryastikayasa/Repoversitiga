@@ -128,12 +128,12 @@ static void add_device_control_tool(cJSON *setup)
     cJSON *properties = cJSON_AddObjectToObject(parameters, "properties");
     cJSON *command = cJSON_AddObjectToObject(properties, "command");
     cJSON_AddStringToObject(command, "type", "STRING");
-    cJSON_AddStringToObject(command, "description", "Command perangkat yang harus dijalankan.");
+    cJSON_AddStringToObject(command, "description", "Command perangkat yang harus dijalankan sebagai satu kali tekan tombol fisik.");
 
     cJSON *enum_values = cJSON_AddArrayToObject(command, "enum");
     static const char *const commands[] = {
         "r1", "r2", "r3", "r4",
-        "fan_speed", "fan_swing", "fan_mode",
+        "fan_power", "fan_speed", "fan_swing", "fan_mode",
         "mp3_mode", "mp3_play", "mp3_eq",
         "m_led", "m_mute", "m_musik", "m_cek",
         "cek_suhu", "cek_cahaya",
@@ -180,12 +180,14 @@ bool build_gemini_setup(char **output, size_t *output_len)
     cJSON *system_text = cJSON_CreateObject();
     cJSON_AddStringToObject(system_text, "text",
             "Kamu adalah asisten suara berbahasa Indonesia. "
-    "Jika pengguna meminta menekan tombol perangkat, gunakan fungsi control_device dengan command tombol yang tepat. "
-    "Pahami perintah natural seperti \"tekan tombol play\", \"hidupkan kipas\", \"naikkan kecepatan kipas\", \"turunkan kecepatan kipas\", \"ubah mode kipas\", \"tekan tombol colokan harian\", \"tekan tombol colokan panjang\", \"tekan tombol saklar lampu\", dan \"tekan tombol power MP3\". "
-    "Semua aksi perangkat adalah simulasi menekan tombol fisik satu kali, bukan mengatur atau melacak status on/off. "
-    "Pemetaan tombol: colokan harian=r1, colokan panjang=r2, saklar lampu=r3, power MP3=r4, fan_speed=untuk menghidupkan kipas dan juga menekan tombol kecepatan kipas, fan_swing=ayunan kipas, fan_mode=mode kipas, mode MP3=mp3_mode, play=mp3_play, EQ=mp3_eq, LED=m_led, mute=m_mute, musik=m_musik, cek=m_cek. "
-    "Untuk menghidupkan kipas gunakan tombol speed (fan_speed), karena tombol power kipas tidak reliably menyalakan kipas. "
-    "Jangan membuat atau menggunakan command on/off/power kipas yang tidak tersedia. "
+    "Jika pengguna meminta aksi pada perangkat, gunakan fungsi control_device dengan command tombol yang tepat. "
+    "Semua aksi perangkat berarti menekan tombol fisik satu kali. Kamu tidak mengetahui dan tidak boleh menebak keadaan fisik perangkat, serta tidak menyimpan atau melacak status ON/OFF. "
+    "Pahami perintah natural seperti \"tekan tombol play\", \"hidupkan kipas\", \"matikan kipas\", \"naikkan kecepatan kipas\", \"turunkan kecepatan kipas\", \"ubah mode kipas\", \"tekan tombol colokan harian\", \"tekan tombol colokan panjang\", \"tekan tombol saklar lampu\", dan \"tekan tombol power MP3\". "
+    "Pemetaan tombol: colokan harian=r1, colokan panjang=r2, saklar lampu=r3, power MP3=r4, fan_power=tombol power kipas, fan_speed=tombol speed kipas, fan_swing=ayunan kipas, fan_mode=mode kipas, mode MP3=mp3_mode, play=mp3_play, EQ=mp3_eq, LED=m_led, mute=m_mute, musik=m_musik, cek=m_cek. "
+    "Jika pengguna mengatakan hidupkan kipas atau matikan kipas, tetap tekan tombol power kipas satu kali menggunakan fan_power. Jika pengguna meminta menekan tombol speed atau menaikkan/menurunkan kecepatan, gunakan fan_speed. "
+    "Untuk relay, colokan, lampu, MP3, dan tombol lainnya, kata hidupkan, matikan, atau tekan tidak mengubah jumlah tekanan: selalu kirim command yang sesuai tepat satu kali. "
+    "Setelah fungsi berhasil, respons mengikuti maksud pengguna secara natural. Jika pengguna mengatakan hidupkan, katakan bahwa sudah dihidupkan. Jika mengatakan matikan, katakan bahwa sudah dimatikan. Jika mengatakan tekan, katakan bahwa tombol sudah ditekan. Jangan mengklaim mengetahui status fisik perangkat. "
+    "Jangan membuat atau menggunakan command on/off berbasis status. Jangan mengarang command. "
     "Jika pengguna meminta kamu menampilkan ekspresi wajah, gunakan control_device dengan command Face yang sesuai. "
     "Gunakan face_happy untuk senyum atau bahagia, "
     "face_sad untuk sedih atau menangis, "
@@ -196,9 +198,7 @@ bool build_gemini_setup(char **output, size_t *output_len)
     "face_sleep untuk tidur, "
     "dan face_idle untuk ekspresi netral. "
     "Setiap command Face akan tampil selama 5 detik lalu kembali ke ekspresi sebelumnya. "
-    "Jangan mengarang command. "
-    "Tunggu hasil fungsi sebelum menyatakan aksi berhasil. "
-    "Setelah hasil fungsi berhasil, jawab pengguna secara natural, singkat, dan ramah dalam bahasa Indonesia. "
+    "Tunggu hasil fungsi sebelum menyatakan tombol berhasil ditekan. "
     "Jangan pernah mengucapkan nama command UART kepada pengguna.");
     cJSON_AddItemToArray(system_parts, system_text);
     add_device_control_tool(setup);
@@ -276,54 +276,50 @@ static void process_gemini_tool_call(cJSON *tool_call)
 
         bool success = false;
         if (strcmp(name->valuestring, "control_device") == 0) {
-    cJSON *command = cJSON_GetObjectItem(args, "command");
+            cJSON *command = cJSON_GetObjectItem(args, "command");
 
-    if (cJSON_IsString(command) && command->valuestring) {
-        const char *cmd = command->valuestring;
+            if (cJSON_IsString(command) && command->valuestring) {
+                const char *cmd = command->valuestring;
 
-        if (strcmp(cmd, "face_idle") == 0) {
-            face_show_for_ms(FACE_IDLE, 5000);
-            success = true;
-        }
-        else if (strcmp(cmd, "face_listening") == 0) {
-            face_show_for_ms(FACE_LISTENING, 5000);
-            success = true;
-        }
-        else if (strcmp(cmd, "face_thinking") == 0) {
-            face_show_for_ms(FACE_THINKING, 5000);
-            success = true;
-        }
-        else if (strcmp(cmd, "face_speaking") == 0) {
-            face_show_for_ms(FACE_SPEAKING, 5000);
-            success = true;
-        }
-        else if (strcmp(cmd, "face_happy") == 0) {
-            face_show_for_ms(FACE_HAPPY, 5000);
-            success = true;
-        }
-        else if (strcmp(cmd, "face_sad") == 0) {
-            face_show_for_ms(FACE_SAD, 5000);
-            success = true;
-        }
-        else if (strcmp(cmd, "face_error") == 0) {
-            face_show_for_ms(FACE_ERROR, 5000);
-            success = true;
-        }
-        else if (strcmp(cmd, "face_sleep") == 0) {
-            face_show_for_ms(FACE_SLEEP, 5000);
-            success = true;
-        }
-        else {
-            success = uart_control_execute_command(cmd);
-
-            ESP_LOGI(TAG,
-                     "UART TOOL command=%s result=%s",
-                     cmd,
-                     success ? "OK" : "REJECTED");
-        }
-    } else {
-        ESP_LOGW(TAG, "control_device tanpa argument command");
-    }
+                if (strcmp(cmd, "face_idle") == 0) {
+                    face_show_for_ms(FACE_IDLE, 5000);
+                    success = true;
+                }
+                else if (strcmp(cmd, "face_listening") == 0) {
+                    face_show_for_ms(FACE_LISTENING, 5000);
+                    success = true;
+                }
+                else if (strcmp(cmd, "face_thinking") == 0) {
+                    face_show_for_ms(FACE_THINKING, 5000);
+                    success = true;
+                }
+                else if (strcmp(cmd, "face_speaking") == 0) {
+                    face_show_for_ms(FACE_SPEAKING, 5000);
+                    success = true;
+                }
+                else if (strcmp(cmd, "face_happy") == 0) {
+                    face_show_for_ms(FACE_HAPPY, 5000);
+                    success = true;
+                }
+                else if (strcmp(cmd, "face_sad") == 0) {
+                    face_show_for_ms(FACE_SAD, 5000);
+                    success = true;
+                }
+                else if (strcmp(cmd, "face_error") == 0) {
+                    face_show_for_ms(FACE_ERROR, 5000);
+                    success = true;
+                }
+                else if (strcmp(cmd, "face_sleep") == 0) {
+                    face_show_for_ms(FACE_SLEEP, 5000);
+                    success = true;
+                }
+                else {
+                    success = uart_control_execute_command(cmd);
+                    ESP_LOGI(TAG, "UART TOOL command=%s result=%s", cmd, success ? "OK" : "REJECTED");
+                }
+            } else {
+                ESP_LOGW(TAG, "control_device tanpa argument command");
+            }
         }
 
         if (!websocket_send_tool_response(id->valuestring, name->valuestring, success))
@@ -348,9 +344,6 @@ void process_gemini_message(const char *json, size_t len)
         return;
     }
 
-    // Gemini Live sends function calls as a dedicated top-level toolCall.
-    // Execute locally, send the UART command, then return toolResponse so
-    // Gemini can produce the natural spoken confirmation.
     cJSON *tool_call = cJSON_GetObjectItem(root, "toolCall");
     if (cJSON_IsObject(tool_call))
         process_gemini_tool_call(tool_call);
