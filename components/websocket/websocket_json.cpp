@@ -133,7 +133,7 @@ static void add_device_control_tool(cJSON *setup)
     cJSON *enum_values = cJSON_AddArrayToObject(command, "enum");
     static const char *const commands[] = {
         "r1", "r2", "r3", "r4",
-        "fan_power", "fan_speed", "fan_swing", "fan_mode",
+        "fan_pwr", "fan_speed", "fan_swing", "fan_mode",
         "mp3_mode", "mp3_play", "mp3_eq",
         "m_led", "m_mute", "m_musik", "m_cek",
         "cek_suhu", "cek_cahaya",
@@ -183,8 +183,8 @@ bool build_gemini_setup(char **output, size_t *output_len)
     "Jika pengguna meminta aksi pada perangkat, gunakan fungsi control_device dengan command tombol yang tepat. "
     "Semua aksi perangkat berarti menekan tombol fisik satu kali. Kamu tidak mengetahui dan tidak boleh menebak keadaan fisik perangkat, serta tidak menyimpan atau melacak status ON/OFF. "
     "Pahami perintah natural seperti \"tekan tombol play\", \"hidupkan kipas\", \"matikan kipas\", \"naikkan kecepatan kipas\", \"turunkan kecepatan kipas\", \"ubah mode kipas\", \"tekan tombol colokan harian\", \"tekan tombol colokan panjang\", \"tekan tombol saklar lampu\", dan \"tekan tombol power MP3\". "
-    "Pemetaan tombol: colokan harian=r1, colokan panjang=r2, saklar lampu=r3, power MP3=r4, fan_power=tombol power kipas, fan_speed=tombol speed kipas, fan_swing=ayunan kipas, fan_mode=mode kipas, mode MP3=mp3_mode, play=mp3_play, EQ=mp3_eq, LED=m_led, mute=m_mute, musik=m_musik, cek=m_cek. "
-    "Jika pengguna mengatakan hidupkan kipas atau matikan kipas, tetap tekan tombol power kipas satu kali menggunakan fan_power. Jika pengguna meminta menekan tombol speed atau menaikkan/menurunkan kecepatan, gunakan fan_speed. "
+    "Pemetaan tombol: colokan harian=r1, colokan panjang=r2, saklar lampu=r3, power MP3=r4, fan_pwr=tombol power kipas untuk mematikan kipas, fan_speed=tombol speed kipas untuk menghidupkan kipas dan mengubah kecepatan, fan_swing=ayunan kipas, fan_mode=mode kipas, mode MP3=mp3_mode, play=mp3_play, EQ=mp3_eq, LED=m_led, mute=m_mute, musik=m_musik, cek=m_cek. "
+    "Jika pengguna mengatakan hidupkan kipas, gunakan fan_speed satu kali. Jika pengguna mengatakan matikan kipas, gunakan fan_pwr satu kali. Jika pengguna meminta naikkan atau turunkan kecepatan kipas, gunakan fan_speed satu kali. Jangan gunakan fan_pwr untuk menghidupkan kipas. "
     "Untuk relay, colokan, lampu, MP3, dan tombol lainnya, kata hidupkan, matikan, atau tekan tidak mengubah jumlah tekanan: selalu kirim command yang sesuai tepat satu kali. "
     "Setelah fungsi berhasil, respons mengikuti maksud pengguna secara natural. Jika pengguna mengatakan hidupkan, katakan bahwa sudah dihidupkan. Jika mengatakan matikan, katakan bahwa sudah dimatikan. Jika mengatakan tekan, katakan bahwa tombol sudah ditekan. Jangan mengklaim mengetahui status fisik perangkat. "
     "Jangan membuat atau menggunakan command on/off berbasis status. Jangan mengarang command. "
