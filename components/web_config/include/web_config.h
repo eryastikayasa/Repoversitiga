@@ -29,6 +29,9 @@ bool web_config_load_wifi(char *ssid, size_t ssid_len,
 // Baca API key Gemini dari NVS.
 bool web_config_load_api_key(char *api_key, size_t max_len);
 
+// Validasi API key tanpa mencetak nilai rahasia.
+bool web_config_api_key_is_valid(const char *api_key);
+
 // Set force_config = 1, lalu restart.
 void web_config_force_reset(void);
 
