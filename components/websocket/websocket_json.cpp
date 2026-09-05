@@ -1,5 +1,5 @@
 #include "websocket_internal.h"
-
+#include "web_config.h"
 #include "display.h"
 #include "audio_hal.h"
 #include "uart_control.h"
@@ -201,6 +201,16 @@ bool build_gemini_setup(char **output, size_t *output_len)
     "Tunggu hasil fungsi sebelum menyatakan tombol berhasil ditekan. "
     "Jangan pernah mengucapkan nama command UART kepada pengguna.");
     cJSON_AddItemToArray(system_parts, system_text);
+    static char role_text[512];
+
+if (web_config_load_role(role_text, sizeof(role_text)) &&
+    role_text[0] != '\0') {
+    cJSON *role_part = cJSON_CreateObject();
+    if (role_part) {
+        cJSON_AddStringToObject(role_part, "text", role_text);
+        cJSON_AddItemToArray(system_parts, role_part);
+    }
+}
     add_device_control_tool(setup);
 
     cJSON *realtime = cJSON_AddObjectToObject(setup, "realtimeInputConfig");
